@@ -232,7 +232,7 @@ il y en a à chaque point de la grille.
 
 
 ```{r mise_evidence_biais, echo = FALSE}
-# TODO Ici on fait la diff entre modele physique et point de stations pour les stations
+tibble(erreur_modele_physique = donnees_stats_stations$z - donnees_stats_stations$mod)
 ```
 
 ## Le meilleur des deux mondes : Krigeage de l'erreur.
@@ -268,7 +268,7 @@ Et on conserve donc la même pépite.
 
 ```{r variofit_erreur, echo = TRUE}
 varioest_err <- variofit(vario_err.b,
-      cov.model = "gaussian", fix.nugget = TRUE,
+      cov.model = "exponential", fix.nugget = TRUE,
       nugget = 100
 )
 summary(varioest_err)
@@ -298,14 +298,45 @@ plot_stats_physique <- ggplot(data = donnees_stats_physique) +
       scale_fill_viridis_c(limits = c(70, 220)) +
       ggtitle("Modèle - Krigeage\nde l'erreur") +
       theme(aspect.ratio = 1)
-plot_stats_physique
+
+plot_erreur_variance <- ggplot(data = donnees_stats_physique) +
+      aes(x = x, y = y) +
+      geom_raster(aes(fill = krige.var)) +
+      scale_fill_viridis_c() +
+      ggtitle("Variance du Krigeage\nde l'erreur") +
+      theme(aspect.ratio = 1)
+plot_stats_physique + plot_erreur_variance + plot_layout(
+      ncol = 2,
+      guides = "collect"
+)
 ```
 
 Comparons les 3 méthodes :
 ```{r comparaison_3_methodes, echo = TRUE}
 plot_physique_predict + plot_krigeage_predict + plot_stats_physique + plot_layout(ncol = 2, nrow = 2, guides = "collect")
 ```
+On peut voir que le krigeage de l'erreur et sa prise en compte permettent de 
+diminiuer les valeurs du modèles physique.
 
-```{r mise_en_evidence_diff, echo = FALSE}
-# TODO Mettre en évidence la correction du biais
+On retrouve alors notamment des niveaux de 
+pollutions à l'ozone à Paris plus bas comme attendu aux vues des réactions qui 
+ont lieu avec les produits de pollution automobile.
+
+```{r plot_seuils, echo = TRUE}
+# 130, 180, 360
+
+donnees_stats_physique$alerte_level <- cut(donnees_stats_physique$z_corr,
+      breaks = c(0, 130, 180, 360, Inf),
+      labels = c("normal", "alerte", "mesure", "mesure_forte")
+)
+
+ggplot(data = donnees_stats_physique) +
+      aes(x = x, y = y) +
+      geom_raster(aes(fill = alerte_level)) +
+      scale_fill_discrete() +
+      ggtitle("Zone de dépassement des seuils") +
+      theme(aspect.ratio = 1)
+
 ```
+
+Et voici donc les zones où les seuils précisés ont été dépassés.
