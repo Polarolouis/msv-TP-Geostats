@@ -102,3 +102,74 @@ observation-modèle aux stations.
 Comparer aux deux cartes précédentes. Commenter.
 
 On admet la présence d'un bruit de mesure de $10\mu g/m^3$ sur les observations.
+
+# Import des données
+```{r charger les packages, echo=FALSE,message=FALSE,warning=FALSE}
+require(geoR)
+require(ggplot2)
+```
+
+Ici on importe les données et on les converties en objet geodata
+
+```{r import_donnees}
+donnees_stats_stations <- read.table("data/stationsKm.txt", header = TRUE)
+
+donnees_physique <- read.table("data/grilleKm.txt", header = TRUE)
+
+geodonnees_stations <- as.geodata(donnees_stats_stations)
+```
+
+```{r premier_plot_donnees}
+plot(geodonnees_stations)
+```
+
+# Premier travail géostats avec les 21 stations
+```{r variogramme empirique}
+vario.c = variog(geodonnees_stations,op="cloud")
+plot(vario.c,main = "Nuée variographique",pch='+')
+
+# Variogramme empirique sans paramètre
+vario.b = variog(geodonnees_stations)
+plot(vario.b,main = "Variogramme empirique")
+# vario.b = variog(geodonnees_stations, max.dist = 100, breaks = seq(0, 90, l = 10)) # MODIF
+# plot(vario.b,main = "Variogramme empirique")
+```
+
+L'erreur de mesure de $10 \mu g/m^3$ correspond à l'écart-type de l'erreur de 
+mesure. Donc on prend pour pépite la valeur de variance de l'erreur de mesure 
+soit 100.  
+```{r variogramme ajuste}
+varioest = variofit(vario.b,
+    cov.model = "gaussian", fix.nugget = TRUE,
+    nugget = 100
+)
+summary(varioest)
+plot(vario.b, main="modele exponential")
+lines(varioest)
+```
+
+```{r krigeage}
+# Pour générer la grille
+# grille = expand.grid( , )
+grille = donnees_physique[,1:2]
+# ok pour ordinary krige, le obj.model pour utiliser le variogramme fitté
+Kcontrol = krige.control(type.krige = "ok", obj.model = varioest)
+# loc pour savoir sur quoi appliqué le krigeage
+K = krige.conv(geodonnees_stations, loc = grille, krige = Kcontrol)
+str(K)
+
+# Utilise image.krige pour afficher le résultat de krigeage
+image(K)
+
+image(K,col = terrain.colors(64), ylim=c(-10,100), zlim= c(109,281),
+      x.leg=c(0,100), y.leg=c(-10,-5) ,coords.data=geodonnees_stations$coords)
+title(main="Krigeage")
+
+image(K,col = terrain.colors(64), ylim=c(-10,110), zlim= c(0,40), 
+      val = sqrt(K$krige.var),
+      x.leg=c(0,100), y.leg=c(-10,-5), coords.data=geodonnees_stations$coords)
+title(main="Variance de krigeage  ")
+```
+
+On peut voir ici qu'avec le faible nombre de données, le krigeage est très 
+grossier.
