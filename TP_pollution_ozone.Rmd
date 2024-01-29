@@ -1,4 +1,11 @@
-# TP Pollution en Ozone de l'air en Région Parisienne
+title:"TP Pollution en Ozone de l'air en Région Parisienne"
+author: Louis Lacoste
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
