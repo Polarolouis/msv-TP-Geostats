@@ -10,7 +10,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Etude de cas : pollution de l'air
+# Introduction et contexte
 
 ### Les données géospatiales
 La région parisienne est assimilée à un carré qui comporte 21 stations mesurant
@@ -33,7 +33,8 @@ zones rurales.
 Donc l'endroit le plus pollué à l'ozone de la région Parisienne c'est 
 Rambouillet.
 
-A l'époque les différents seuils :
+Les différents seuils :
+
 - $130\mu g/m^3$ alerte
 - $180\mu g/m^3$ prise de mesure
 - $360\mu g/m^3$ mesure plus forte
@@ -60,7 +61,7 @@ données, il y a des **gros biais**.
 ### Comparaison et combinaison
 Le modèle stats aura un faible biais aux observations mais sera mauvais 
 ailleurs.
-Le modèle phyisque a un fort biais mais prend en compte la physique et sera 
+Le modèle physique a un fort biais mais prend en compte la physique et sera 
 meilleur plus loin
 
 On va donc combiner les deux :
@@ -69,6 +70,8 @@ $Z^{obs}_i - Z^{mod}_i = Err_i$
 Et faire un krigeage de l'erreur pour obtenir $\hat{Err_0}$ et donc reconstruire
 une valeur prédite intégrant la physique :
 $$ Z^{pred}_0 = Z^{mod}_0 + \hat{Err_0} $$
+
+## Objectif et questions du sujet
 
 On souhaite réaliser une carte quotidienne de concentration d'ozone sur la région Parisienne. Pour cela on
 dispose chaque jour des sorties d'un modèle déterministe mis au point au Laboratoire de Météorologie
@@ -103,10 +106,14 @@ Comparer aux deux cartes précédentes. Commenter.
 
 On admet la présence d'un bruit de mesure de $10\mu g/m^3$ sur les observations.
 
-# Import des données
+# Traitement et analyse des données
+
+## Import des données
 ```{r charger les packages, echo=FALSE,message=FALSE,warning=FALSE}
 require(geoR)
 require(ggplot2)
+require(patchwork)
+require(dplyr)
 ```
 
 Ici on importe les données et on les converties en objet geodata
@@ -123,7 +130,7 @@ geodonnees_stations <- as.geodata(donnees_stats_stations)
 plot(geodonnees_stations)
 ```
 
-# Premier travail géostats avec les 21 stations
+## Premier travail géostats avec les 21 stations
 ```{r variogramme empirique}
 vario.c = variog(geodonnees_stations,op="cloud")
 plot(vario.c,main = "Nuée variographique",pch='+')
@@ -140,7 +147,7 @@ mesure. Donc on prend pour pépite la valeur de variance de l'erreur de mesure
 soit 100.  
 ```{r variogramme ajuste}
 varioest = variofit(vario.b,
-    cov.model = "gaussian", fix.nugget = TRUE,
+    cov.model = "exponential", fix.nugget = TRUE,
     nugget = 100
 )
 summary(varioest)
@@ -156,20 +163,149 @@ grille = donnees_physique[,1:2]
 Kcontrol = krige.control(type.krige = "ok", obj.model = varioest)
 # loc pour savoir sur quoi appliqué le krigeage
 K = krige.conv(geodonnees_stations, loc = grille, krige = Kcontrol)
-str(K)
-
-# Utilise image.krige pour afficher le résultat de krigeage
-image(K)
-
-image(K,col = terrain.colors(64), ylim=c(-10,100), zlim= c(109,281),
-      x.leg=c(0,100), y.leg=c(-10,-5) ,coords.data=geodonnees_stations$coords)
-title(main="Krigeage")
-
-image(K,col = terrain.colors(64), ylim=c(-10,110), zlim= c(0,40), 
-      val = sqrt(K$krige.var),
-      x.leg=c(0,100), y.leg=c(-10,-5), coords.data=geodonnees_stations$coords)
-title(main="Variance de krigeage  ")
 ```
 
-On peut voir ici qu'avec le faible nombre de données, le krigeage est très 
-grossier.
+```{r data_stats_plot, echo = TRUE}
+data_plot_krige_stations <- data.frame(
+      x = grille$x, y = grille$y,
+      krige.predict = K$predict, krige.var = K$krige.var
+)
+
+data_plot_stations <- data.frame(
+      x = donnees_stats_stations$x,
+      y = donnees_stats_stations$y
+)
+
+plot_krigeage_predict <- ggplot(data = data_plot_krige_stations) +
+      aes(x = x, y = y) +
+      geom_raster(aes(fill = krige.predict)) +
+      scale_fill_viridis_c(limits = c(70,220)) +
+      geom_point(data = data_plot_stations, aes(x = x, y = y)) +
+      ggtitle("Krigeage seul") +
+      theme(aspect.ratio = 1)
+
+plot_krigeage_variance <- ggplot(data = data_plot_krige_stations) +
+      aes(x = x, y = y) +
+      geom_raster(aes(fill = krige.var)) +
+      geom_point(data = data_plot_stations, aes(x = x, y = y)) +
+      scale_fill_gradient("Variance\nde krigeage",low = "green", high = "red") +
+      ggtitle("Variance du krigeage seul") +
+      theme(aspect.ratio = 1)
+
+
+(plot_krigeage_predict / plot_krigeage_variance) + plot_layout(ncol = 2, guides = "collect")
+```
+
+On peut voir ici qu'avec le faible nombre de données (21 stations), le krigeage
+est grossier et la variance très grande. Donc la précision est très faible.
+
+## Le modèle physique
+
+```{r modele_physique, echo = TRUE}
+geodonnees_physique <- as.geodata(donnees_physique)
+plot(geodonnees_physique)
+```
+
+Et maintenant l'affichage sous la forme de carte
+```{r carte_physique, echo = TRUE}
+data_plot_physique <- data.frame(
+      x = geodonnees_physique$coords[,1],
+      y = geodonnees_physique$coords[,2], data = geodonnees_physique$data
+)
+plot_physique_predict <- ggplot(data = data_plot_physique) +
+      aes(x = x, y = y) +
+      geom_raster(aes(fill = data)) +
+      scale_fill_viridis_c(limits = c(70,220)) +
+      ggtitle("Modèle physique seul") +
+      theme(aspect.ratio = 1)
+
+plot_physique_predict + geom_point(data = as.data.frame(geodonnees_physique), aes(x = x, y = y))
+```
+
+Et maintenant comparons les deux cartes obtenues :
+```{r comparaison_deux_methodes, echo = TRUE}
+plot_physique_predict + (plot_krigeage_predict)
+```
+
+Pour le modèle physique nous n'avons pas représenté les points de données car 
+il y en a à chaque point de la grille.
+
+
+```{r mise_evidence_biais, echo = FALSE}
+# TODO Ici on fait la diff entre modele physique et point de stations pour les stations
+```
+
+## Le meilleur des deux mondes : Krigeage de l'erreur.
+
+```{r erreur_station, echo = FALSE}
+donnees_stations_erreur <- donnees_stats_stations %>%
+      mutate(erreur = z - mod) %>%
+      select(x, y, erreur)
+geodonnees_stations_erreur <- as.geodata(donnees_stations_erreur)
+```
+
+Nous avons donc ici les erreurs commises par le modèle physique par rapport 
+aux vraies mesures.
+
+```{r variog_erreur, echo = TRUE}
+vario_err.c <- variog(geodonnees_stations_erreur, op = "cloud")
+plot(vario_err.c, main = "Nuée variographique", pch = "+")
+
+# Variogramme empirique sans paramètre
+vario_err.b <- variog(geodonnees_stations_erreur)
+plot(vario_err.b, main = "Variogramme empirique")
+# vario.b = variog(geodonnees_stations, max.dist = 100, breaks = seq(0, 90, l = 10)) # MODIF
+# plot(vario.b,main = "Variogramme empirique")
+```
+On a :
+$$Z^{obs}_i = Z_i + \delta_i, \delta_i \sim \mathcal{N}(0, 100)$$
+
+\begin{align*}
+\underbrace{Z^{mod}_i - Z^{obs}_i}_{\tilde E_i} &= \underbrace{Z^{mod}_i - Z_i}_{E_i}  - \delta_i
+\end{align*}
+
+Et on conserve donc la même pépite.
+
+```{r variofit_erreur, echo = TRUE}
+varioest_err <- variofit(vario_err.b,
+      cov.model = "gaussian", fix.nugget = TRUE,
+      nugget = 100
+)
+summary(varioest_err)
+plot(vario_err.b, main = "modele exponential")
+lines(varioest_err)
+```
+
+```{r krigeage_erreur, echo = TRUE}
+# Pour générer la grille
+# grille = expand.grid( , )
+grille <- donnees_physique[, 1:2]
+# ok pour ordinary krige, le obj.model pour utiliser le variogramme fitté
+Kcontrol_err = krige.control(type.krige = "ok", obj.model = varioest_err)
+# loc pour savoir sur quoi appliqué le krigeage
+K_err <- krige.conv(geodonnees_stations_erreur, loc = grille, krige = Kcontrol_err)
+```
+
+```{r modele_phy_stats, echo = FALSE}
+donnees_stats_physique <- donnees_physique %>% mutate(
+      z_corr = z - K_err$predict,
+      krige.var = K_err$krige.var
+)
+
+plot_stats_physique <- ggplot(data = donnees_stats_physique) +
+      aes(x = x, y = y) +
+      geom_raster(aes(fill = z_corr)) +
+      scale_fill_viridis_c(limits = c(70, 220)) +
+      ggtitle("Modèle - Krigeage\nde l'erreur") +
+      theme(aspect.ratio = 1)
+plot_stats_physique
+```
+
+Comparons les 3 méthodes :
+```{r comparaison_3_methodes, echo = TRUE}
+plot_physique_predict + plot_krigeage_predict + plot_stats_physique + plot_layout(ncol = 2, nrow = 2, guides = "collect")
+```
+
+```{r mise_en_evidence_diff, echo = FALSE}
+# TODO Mettre en évidence la correction du biais
+```
