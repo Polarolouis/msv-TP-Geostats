@@ -4,6 +4,65 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Etude de cas : pollution de l'air
+
+### Les données géospatiales
+La région parisienne est assimilée à un carré qui comporte 21 stations mesurant
+plusieurs polluant dont l'ozone.
+
+Présent dans l'air à environ $60 \mu g/m^3$.
+Mais la circu automobile pollue et produit NO et NO2, qui s'associe à l'O2 de 
+l'air et forme de l'O3 (+NO et NO2), si il y a du rayonnement élevé pour catalyser la 
+réaction. Pour mesurer le rayonnement, on utilise en proxy la température.
+Température élevée indique rayonnement élevé (forte corrélation). 
+Donc il n'y a de la pollution à l'ozone que en été.
+La réaction est réversible si il reste du NO et du NO2, donc en ville il y a peu
+d'ozone car il est reconsommé sur place.
+
+
+Mais avec du vent l'ozone se balade.
+En dépression le vent vient de l'Ouest et balaie tout.
+En situation anti-cyclonique, faible vent d'Est qui se fait piéger dans des 
+zones rurales.
+Donc l'endroit le plus pollué à l'ozone de la région Parisienne c'est 
+Rambouillet.
+
+A l'époque les différents seuils :
+- $130\mu g/m^3$ alerte
+- $180\mu g/m^3$ prise de mesure
+- $360\mu g/m^3$ mesure plus forte
+
+Période temporelle : week-end d'août 1998 (avant le 15 août).
+
+Objectif : faire une carte
+On peut faire un krigeage avec les 21 mesures prises aux stations
+Mais risque d'être un peu léger !
+
+### Les physiciens à la rescousse
+
+Les physiciens du LMD ont mis au point un modèle physico-chimique basé sur la
+météo, les émissions (inventaire, pas des mesures) et d'autres variables 
+(topographie, ...). Ce modèle est valable sur toute la grille.
+
+Ce modèle étant un modèle dynamique, il a besoin de conditions initiales dures à
+poser.
+
+En confrontant les prédictions du modèles physique et en le confrontant aux 
+données, il y a des **gros biais**.
+
+
+### Comparaison et combinaison
+Le modèle stats aura un faible biais aux observations mais sera mauvais 
+ailleurs.
+Le modèle phyisque a un fort biais mais prend en compte la physique et sera 
+meilleur plus loin
+
+On va donc combiner les deux :
+$Z^{obs}_i - Z^{mod}_i = Err_i$
+
+Et faire un krigeage de l'erreur pour obtenir $\hat{Err_0}$ et donc reconstruire
+une valeur prédite intégrant la physique :
+$$ Z^{pred}_0 = Z^{mod}_0 + \hat{Err_0} $$
+
 On souhaite réaliser une carte quotidienne de concentration d'ozone sur la région Parisienne. Pour cela on
 dispose chaque jour des sorties d'un modèle déterministe mis au point au Laboratoire de Météorologie
 Dynamique (Ecole Polytechnique) et des mesures de
@@ -25,11 +84,14 @@ Le fichier *grilleKm.txt* contient
 
 - colonne 3 : valeur du modèle des points de grille
 
-1. Faire une carte en estimant la concentration en chaque point de la grille par krigeage à partir des mesures aux 21 stations. 
+1. Faire une carte en estimant la concentration en chaque point de 
+la grille par krigeage à partir des mesures aux 21 stations. 
 2. Tracer la carte des concentrations données par le modèle.
-Comparer avec la carte précédente.
-3.  On désire combiner les 2 approches. Pour cela on corrige le modèle déterministe en chaque point de la grille par une estimation de
- la différence concentration-modèle obtenue en krigeant les différences observation-modèle aux stations.     
+Comparer avec la carte précédente. Et mettre en évidence les biais
+3.  On désire combiner les 2 approches. Pour cela on corrige le modèle 
+déterministe en chaque point de la grille par une estimation de
+la différence concentration-modèle obtenue en krigeant les différences 
+observation-modèle aux stations.     
 Comparer aux deux cartes précédentes. Commenter.
 
 On admet la présence d'un bruit de mesure de $10\mu g/m^3$ sur les observations.
