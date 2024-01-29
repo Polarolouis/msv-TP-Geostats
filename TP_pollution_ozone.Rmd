@@ -1,0 +1,35 @@
+# TP Pollution en Ozone de l'air en Région Parisienne
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Etude de cas : pollution de l'air
+On souhaite réaliser une carte quotidienne de concentration d'ozone sur la région Parisienne. Pour cela on
+dispose chaque jour des sorties d'un modèle déterministe mis au point au Laboratoire de Météorologie
+Dynamique (Ecole Polytechnique) et des mesures de
+concentration d'ozone effectuées par AirParif en 21 stations.
+Le fichier *stationsKm.txt*  contient un tableau formé des colonnes suivantes :
+- colonne 1 : abscisses (en km) des stations
+
+- colonne 2 : ordonnées (en km) des stations
+
+- colonne 3 : mesures aux stations (en $\mu g/m^3$)
+
+- colonne 4 : valeur du modèle aux stations
+
+Le fichier *grilleKm.txt* contient
+
+- colonne 1 : abscisses (en km) des points de grille
+
+- colonne 2 : ordonnées (en km) des points de grille
+
+- colonne 3 : valeur du modèle des points de grille
+
+1. Faire une carte en estimant la concentration en chaque point de la grille par krigeage à partir des mesures aux 21 stations. 
+2. Tracer la carte des concentrations données par le modèle.
+Comparer avec la carte précédente.
+3.  On désire combiner les 2 approches. Pour cela on corrige le modèle déterministe en chaque point de la grille par une estimation de
+ la différence concentration-modèle obtenue en krigeant les différences observation-modèle aux stations.     
+Comparer aux deux cartes précédentes. Commenter.
+
+On admet la présence d'un bruit de mesure de $10\mu g/m^3$ sur les observations.

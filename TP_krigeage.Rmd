@@ -1,0 +1,373 @@
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# TP Variogrammes et krigeage
+
+## Objectif
+Les données du fichier simulation.txt donnent les coordonnées $x$, $y$ et la valeur prise par un champ aléatoire en tous les points d'une grille 101$\times$101 du carré $[0;100] \times [0;100]$. 
+On va tirer aléatoirement 100 points parmi les 10201, estimer un variogramme à partir de ces 100 points et réaliser une carte par krigeage du champ aléatoire
+que l'on comparera ensuite à la simulation initiale.
+
+### Chargement des packages
+
+
+```{r charger les packages, echo=FALSE,message=FALSE,warning=FALSE}
+require(geoR)
+require(ggplot2)
+```
+
+
+### Lecture des données
+
+
+```{r charger les donnees}
+simulation = read.table("simulation.txt",header=TRUE)
+head(simulation)
+
+```
+
+## Tirage aléatoire 
+Utiliser la fonction *sample* pour constituer un échantillon de taille 100.
+Transformer cet échantillon en un objet *geodata*, avec la fonction *as.geodata*
+Représenter l'échantillon avec la fonction *plot.geodata*
+
+
+
+```{r tirage aleatoire}
+set.seed(1234) # MODIF
+n = 100
+IndEch = sample(nrow(simulation), n)
+Ech = simulation[IndEch,]
+geodonnees = as.geodata(Ech)
+str(geodonnees)
+class(geodonnees)
+plot(geodonnees)
+```
+
+Le premier des 4 plots nous montre les données avec une légende pour les quartiles:
+- <Q1 : bleu
+- Q1 - Médiane : vert
+- Médiane - Q3 : jaune
+- Q3< : rouge
+
+Les deux plots suivants permettent de voir s'il y a une structure selon x ou y.
+Rien selon y
+Mais une sorte de parabole pour $data = f(x)$ fait le lien avec les 
+points rouge centraux en x.
+
+## Variogramme
+### Variogramme empirique
+La  fonction *variog*  calcule le variogramme empirique. Les différentes options permettent de faire
+varier le nombre de classes, leur amplitude, la distance maximale, ...    
+La fonction *plot(un objet variog)* représente le résultat.    
+Faire varier le nombre de classes, les amplitudes des classes, la distance maximale et choisir un réglage.
+
+
+$$
+\gamma(h) = 1/2 Var(Z(s+h) - Z(s)), \text{si } E(Z(s+h) - Z(s)) = 0
+= 1/2 E((Z(s+h) - Z(s))^2)
+$$
+Alors le variogramme empirique :
+$$ \hat{\gamma} (h) = \sum_{\| s_i - s_j\| \in C_h} \frac{(z_i - z_j)^2}{2} $$
+Cela donne la nuée variographique `vario.c`.
+
+Puis en divisant la nuée en sous-classe et en prenant le point moyen on obtient
+le `vario.b` variogramme empirique.
+
+On voit que sans paramètre le variogramme empirique redescend pour des 
+distances supérieures à 110 alors qu'avant, l'allure semblait bonne.
+Ces points aberrants sont dus au faible nombre de points à grande distance que 
+l'on a.
+
+Règle au doigt mouillé : la distance max à donner est de la moitié de la 
+distance maximale possible.
+
+```{r variogramme empirique}
+vario.c = variog(geodonnees,op="cloud")
+plot(vario.c,main = "Nuée variographique",pch='+')
+
+# Variogramme empirique sans paramètre
+vario.b = variog(geodonnees)
+plot(vario.b,main = "Variogramme empirique")
+vario.b = variog(geodonnees, max.dist = 90, breaks = seq(0, 90, l = 10)) # MODIF
+plot(vario.b,main = "Variogramme empirique")
+```
+
+
+## Variogramme ajusté
+La fonction *variofit* ajuste un variogramme admissible au variogramme empirique.     
+La fonction *lines(objet variofit)* représente le variogramme ajusté sur un graphique déjà existant (le variogramme empirique habituellement).    
+Différentes options permettent de choisir le modèle (exponentiel, gaussien, sphérique, ...), la présence ou non d'une
+pépite, les valeurs initiales des paramètres pour l'algorithme d'optimisation ...     
+Comparer les  ajustements obtenus avec différents modèles et présence ou non d'une pépite.
+
+Par défaut utilise Matern, mets des poids sur les classes en fonction du nombre
+de points dans chaque classe.
+
+Pour Matern
+- $\nu$ régularité, très dur à estimer et correspond au $\kappa$ de `variofit`
+- $\rho$ échelle
+- C palier
+- $\tau$ : pépite
+
+Ici variofit nous fixe $\kappa = 0.5$ donc un Matern de rég 0.5 c'est un exponentiel,
+
+$$\gamma(h) = C (1-e^{-h/p}) + \tau$$.
+
+Ici donc pour les valeurs initiales auto-calculées :
+$\phi = 20$ l'échelle, $\sigma^2 = 1.1$ le palier, $\tau^2 = 0.37$ la pépite.
+
+```{r variogramme ajuste}
+varioest = variofit(vario.b)
+summary(varioest)
+plot(vario.b, main="modele exponential")
+lines(varioest)
+```
+
+Ici marche bien car données simulées.
+
+habituellement, besoin de l'aider en spécifiant différents paramètres.
+On va essayer 3 variogrammes :
+- exponentiel
+- sphérique
+- gaussien
+Avec et sans pépite.
+
+
+```{r differents modeles}
+palier_init = 1.1
+echelle_init = 27.2
+pepite = 0.19
+plot(vario.b, main="Differents modeles")
+varioest1 = variofit(vario.b,cov.model = "exponential",fix.nugget=TRUE, nugget= 0,  
+                  ini.cov.pars= c(palier_init , echelle_init))
+lines(varioest1)
+
+varioest2 = variofit(vario.b,cov.model = "spherical",fix.nugget=TRUE, nugget= 0,
+                  ini.cov.pars= c(palier_init , echelle_init))
+lines(varioest2,col=2)
+varioest3 <- variofit(vario.b,
+      cov.model = "gaussian", fix.nugget = TRUE, nugget = 0,
+      ini.cov.pars = c(palier_init, echelle_init)
+)
+lines(varioest3, col = 3)
+
+varioest4 = variofit(vario.b,cov.model = "exponential",fix.nugget=TRUE, nugget= pepite,
+                              ini.cov.pars= c(palier_init , echelle_init))
+lines(varioest4,col=4)
+
+varioest5 = variofit(vario.b,cov.model = "spherical" ,fix.nugget=TRUE, nugget= pepite,
+                              ini.cov.pars = c(palier_init, echelle_init))
+lines(varioest5,col=5)
+
+varioest6 = variofit(vario.b,cov.model = "gaussian" ,fix.nugget=TRUE, nugget= pepite,
+                              ini.cov.pars= c(palier_init , echelle_init))
+lines(varioest6,col=6)
+
+legend("bottomright", legend = c(
+      "ExpNoPep", "SphNoPep", "GaussNoPep", "ExpPep", "SphPep",
+      "GaussPep"
+), lty = 1, col = 1:6, cex = 0.8)
+```
+
+## Krigeage
+
+Principe du krigeage : on a nos 100 points samplés dans le carrés.
+L'idée on va dessiner une grille et chercher en chaque points d'intersection de
+la grille la valeur à partir des 100 points de données.
+
+Voir la feuille associée au TP pour un schéma.
+
+La fonction *krige.conv* calcule la carte obtenue par krigeage à partir du variogramme choisi en tous
+les points d'une grille. Elle fournit également la variance de krigeage. Les paramètres (variogramme, type
+de krigeage) sont définis par la fonction *krige.control*.  
+La fonction *image(objet kriging)* représente le résultat du krigeage.
+A partir des différents variogrammes obtenus ci-dessus, réaliser les cartes de krigeage  et de variance
+associée. Discuter les résultats obtenus.
+
+Variance de krigeage : $Var(Z_0 - \hat{Z_0}) = \sum_i \lambda_i \gamma_{0i} + \alpha$
+
+```{r krigeage}
+# Pour générer la grille
+# grille = expand.grid( , )
+grille = simulation[, 1:2]
+# ok pour ordinary krige, le obj.model pour utiliser le variogramme fitté
+Kcontrol = krige.control(type.krige = "ok", obj.model = varioest)
+# loc pour savoir sur quoi appliqué le krigeage
+K = krige.conv(geodonnees, loc = grille, krige = Kcontrol)
+str(K)
+
+# Utilise image.krige pour afficher le résultat de krigeage
+image(K)
+
+image(K,col = terrain.colors(64), ylim=c(-10,100), zlim= c(-3,3),
+      x.leg=c(0,100), y.leg=c(-10,-5) ,coords.data=geodonnees$coords)
+title(main="Krigeage")
+
+image(K,col = terrain.colors(64), ylim=c(-10,110), zlim= c(0,1.5), 
+      val = sqrt(K$krige.var), 
+      x.leg=c(0,100), y.leg=c(101,106), coords.data=geodonnees$coords)
+title(main="Variance de krigeage  ")
+```
+
+avec ggplot2
+
+
+```{r avec ggplot2}
+Kres = data.frame(x=grille[,1],y=grille[,2],pred=K$predict, var=K$krige.var)
+ggplot(Kres) + 
+      aes(x = x, y = y)  + 
+      geom_raster(aes(fill = pred)) + 
+      scale_fill_viridis_c(limits= c(-3,3))+ 
+      geom_point(data = Ech, aes(x = x, y = y)) +
+      ggtitle("Krigeage ")
+ggplot(Kres) +
+      aes(x = x, y = y) +
+      geom_raster(aes(fill = var)) +
+      scale_fill_viridis_c(limits = c(0, 2)) +
+      ggtitle("Variance de krigeage ")
+```
+
+
+```{r krigeage differents modeles}
+Kcontrol = krige.control(type.krige="ok",obj.model=varioest1)
+K1 = krige.conv(geodonnees,loc=grille,krige=Kcontrol)
+Kcontrol = krige.control(type.krige="ok",obj.model=varioest2)
+K2 = krige.conv(geodonnees,loc=grille,krige=Kcontrol)
+Kcontrol = krige.control(type.krige="ok",obj.model=varioest3)
+K3 = krige.conv(geodonnees,loc=grille,krige=Kcontrol)
+Kcontrol = krige.control(type.krige="ok",obj.model=varioest4)
+K4 = krige.conv(geodonnees,loc=grille,krige=Kcontrol)
+Kcontrol = krige.control(type.krige="ok",obj.model=varioest5)
+K5 = krige.conv(geodonnees,loc=grille,krige=Kcontrol)
+Kcontrol = krige.control(type.krige="ok",obj.model=varioest6)
+K6 = krige.conv(geodonnees,loc=grille,krige=Kcontrol)
+
+# Pour afficher tout ensemble
+image(K1,
+      col = terrain.colors(64), ylim = c(-10, 100), zlim = c(-3, 3),
+      x.leg = c(0, 100), y.leg = c(-10, -5), coords.data = geodonnees$coords
+)
+title(main="ExpNoPep")
+par(new=TRUE)
+image(K2,
+      col = terrain.colors(64), ylim = c(-10, 100), zlim = c(-3, 3),
+      x.leg = c(0, 100), y.leg = c(-10, -5), coords.data = geodonnees$coords
+)
+title(main="SphNoPep")
+image(K3,col = terrain.colors(64), ylim = c(-10, 100), zlim = c(-3, 3),
+      x.leg = c(0, 100), y.leg = c(-10, -5), coords.data = geodonnees$coords
+)
+title(main="GaussNoPep")
+image(K4,
+      col = terrain.colors(64), ylim = c(-10, 100), zlim = c(-3, 3),
+      x.leg = c(0, 100), y.leg = c(-10, -5), coords.data = geodonnees$coords
+)
+title(main="ExpPep")
+image(K5,
+      col = terrain.colors(64), ylim = c(-10, 100), zlim = c(-3, 3),
+      x.leg = c(0, 100), y.leg = c(-10, -5), coords.data = geodonnees$coords
+)
+title(main="SphPep")
+image(K6,
+      col = terrain.colors(64), ylim = c(-10, 100), zlim = c(-3, 3),
+      x.leg = c(0, 100), y.leg = c(-10, -5), coords.data = geodonnees$coords
+)
+title(main="GaussPep")
+```
+
+Pour le gaussien **sans** pépite on remarque des tâches blanches, en fait cela 
+correspond à des valeurs extrapolées et donc qui sortent de notre échelle.
+Typique pour les processus pas très régulier, le Gaussien sans pépite fait 
+n'importe quoi.
+
+Et **avec** pépite les valeurs pour le Gaussien redeviennent régulières.
+
+### Simulation de départ
+
+
+``````{r simulation de depart}
+image(K,col =terrain.colors(64), ylim=c(-10,100), zlim=c(-4 , 4), val = simulation[,3],
+      x.leg=c(0,100), y.leg=c(-10,-5), coords.data=geodonnees$coords)
+title(main="Simulation de depart")
+
+ggplot(simulation) + aes(x = x, y = y)  + geom_raster(aes(fill = )) + scale_fill_viridis_c(limits=c(-4,4))+ geom_point(data=Ech, aes(x=x,y=y)) + ggtitle("Simulation de depart")
+```
+
+## Simulations conditionnelles
+
+L'idée est ici de simuler des valeurs selon la fonction de covariance $C(h)$ qui
+passent par les points de données mais qui diffèrent de la trajectoire observée.
+Et donc avec ces trajectoires on pourra calculer :
+$Prob(Z_0 > seuil)$ par son estimateur empirique 
+$\frac{nbre~z_0^s > seuil}{nbre~simulations}$.
+
+La fonction *output.control(n.pred=n,simul=TRUE,thres=seuil)* permet de réaliser des simulations
+conditionnelles et d'en déduire des probabilités de non-dépassement d'un seuil. Tracer la carte de
+probabilité de dépassement d'un seuil.
+
+
+
+```{r simulations conditionnelles}
+
+grille2 = expand.grid(seq(0, 100, 2), seq(0, 100, 2))
+# n.pred le nombre de simulations, thres le seuil pour Pr(Z_0 < thres)
+Ocontrol = output.control(n.pred=100, simul=TRUE, thres= 2)
+Ks = krige.conv(geodonnees, loc=grille2, krige=Kcontrol, out=Ocontrol)
+str(Ks)
+
+image(Ks, val = Ks$simulations[,27],col =terrain.colors(64),ylim=c(-10,100),zlim=c(-4,4),
+      x.leg=c(0,100),y.leg=c(-10,-5), coords.data=geodonnees$coords)
+title(main="Simulation conditionnelle")
+
+image(Ks,val = 1 - Ks$probabilities.simulations, col =terrain.colors(64), ylim=c(-10,100),
+      zlim= c(0,1) , x.leg=c(0,100), y.leg=c(-10,-5), coords.data=geodonnees$coords)
+title(main="Probabilite depassement du seuil ")
+
+```
+
+
+
+```{r simus cond ggplot}
+Ksres = data.frame(x=grille2[,1],y=grille2[,2],simu = ?,proba = ?)
+head(Ksres)
+ggplot(Ksres, aes(x = x, y = y) ) + geom_raster(aes(fill = ),interpolate=TRUE) + scale_fill_viridis_c(limits=)+ geom_point(data=Ech, aes(x=x,y=y)) + ggtitle("Simulation conditionnelle")
+ggplot(Ksres, aes(x = x, y = y) ) + geom_raster(aes(fill = ),interpolate=TRUE) + scale_fill_viridis_c(limits=)+ geom_point(data=Ech, aes(x=x,y=y)) + ggtitle("Probabilite depassement du seuil ")
+
+```
+
+## Etude de cas : pollution de l'air
+On souhaite réaliser une carte quotidienne de concentration d'ozone sur la région Parisienne. Pour cela on
+dispose chaque jour des sorties d'un modèle déterministe mis au point au Laboratoire de Météorologie
+Dynamique (Ecole Polytechnique) et des mesures de
+concentration d'ozone effectuées par AirParif en 21 stations.
+Le fichier *stationsKm.txt*  contient un tableau formé des colonnes suivantes :
+- colonne 1 : abscisses (en km) des stations
+
+- colonne 2 : ordonnées (en km) des stations
+
+- colonne 3 : mesures aux stations (en $\mu g/m^3$)
+
+- colonne 4 : valeur du modèle aux stations
+
+Le fichier *grilleKm.txt* contient
+
+- colonne 1 : abscisses (en km) des points de grille
+
+- colonne 2 : ordonnées (en km) des points de grille
+
+- colonne 3 : valeur du modèle des points de grille
+
+1. Faire une carte en estimant la concentration en chaque point de la grille par krigeage à partir des mesures aux 21 stations. 
+2. Tracer la carte des concentrations données par le modèle.
+Comparer avec la carte précédente.
+3.  On désire combiner les 2 approches. Pour cela on corrige le modèle déterministe en chaque point de la grille par une estimation de
+ la différence concentration-modèle obtenue en krigeant les différences observation-modèle aux stations.     
+Comparer aux deux cartes précédentes. Commenter.
+
+On admet la présence d'un bruit de mesure de $10\mu g/m^3$ sur les observations.
