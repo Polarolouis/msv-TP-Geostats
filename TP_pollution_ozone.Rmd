@@ -242,7 +242,9 @@ knitr::kable(tibble("Erreur modèle physique" = donnees_stats_stations$z - donne
 ```
 
 Mais nous pouvons voir que le modèle physique présente des erreurs aux points 
-de mesures. C'est là que nous pouvons essayer de joindre les deux méthodes.
+de mesures et, majoritairement, sous-estime les valeurs réelles. 
+
+C'est là que nous pouvons essayer de joindre les deux méthodes.
 
 ## Le meilleur des deux mondes : Krigeage de l'erreur
 
@@ -254,7 +256,7 @@ Z^{obs}_i - Z^{mod}_i &=  Err_i \\
 Z^{obs}_i &= Z^{mod}_i + Err_i
 \end{align*}
 
-```{r erreur_station, echo = FALSE}
+```{r erreur_station, echo = TRUE}
 donnees_stations_erreur <- donnees_stats_stations %>%
       mutate(erreur = z - mod) %>%
       select(x, y, erreur)
@@ -343,10 +345,6 @@ plot_physique_predict + plot_krigeage_predict + plot_stats_physique + plot_layou
 
 On peut voir que le krigeage de l'erreur et sa prise en compte permettent de 
 corriger les biais du modèle physique.
-
-On retrouve alors notamment des niveaux de 
-pollutions à l'ozone à Paris plus bas comme attendu aux vues des réactions qui 
-ont lieu avec les produits de pollution automobile.
 
 
 ```{r comparaison_variance_plot, echo = FALSE }
