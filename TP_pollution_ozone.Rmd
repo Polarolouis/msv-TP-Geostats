@@ -1,4 +1,5 @@
-title:"TP Pollution en Ozone de l'air en Région Parisienne"
+---
+title: "TP Pollution en Ozone de l'air en Région Parisienne"
 author: Louis Lacoste
 output:
   html_document:
@@ -155,6 +156,9 @@ plot(vario.b, main="modele exponential")
 lines(varioest)
 ```
 
+Le variogramme ajusté est beaucoup moins joli que sur les données simulés mais
+cela est dû à l'utilisation de vraies données.
+
 ```{r krigeage}
 # Pour générer la grille
 # grille = expand.grid( , )
@@ -165,7 +169,9 @@ Kcontrol = krige.control(type.krige = "ok", obj.model = varioest)
 K = krige.conv(geodonnees_stations, loc = grille, krige = Kcontrol)
 ```
 
-```{r data_stats_plot, echo = TRUE}
+Après le krigeage ci-dessus nous obtenons les résultats suivants :
+
+```{r data_stats_plot, echo = FALSE}
 data_plot_krige_stations <- data.frame(
       x = grille$x, y = grille$y,
       krige.predict = K$predict, krige.var = K$krige.var
@@ -179,7 +185,7 @@ data_plot_stations <- data.frame(
 plot_krigeage_predict <- ggplot(data = data_plot_krige_stations) +
       aes(x = x, y = y) +
       geom_raster(aes(fill = krige.predict)) +
-      scale_fill_viridis_c(limits = c(70,220)) +
+      scale_fill_viridis_c("Valeurs\nprédites", limits = c(70, 225)) +
       geom_point(data = data_plot_stations, aes(x = x, y = y)) +
       ggtitle("Krigeage seul") +
       theme(aspect.ratio = 1)
@@ -207,7 +213,7 @@ plot(geodonnees_physique)
 ```
 
 Et maintenant l'affichage sous la forme de carte
-```{r carte_physique, echo = TRUE}
+```{r carte_physique, echo = FALSE}
 data_plot_physique <- data.frame(
       x = geodonnees_physique$coords[,1],
       y = geodonnees_physique$coords[,2], data = geodonnees_physique$data
@@ -215,7 +221,7 @@ data_plot_physique <- data.frame(
 plot_physique_predict <- ggplot(data = data_plot_physique) +
       aes(x = x, y = y) +
       geom_raster(aes(fill = data)) +
-      scale_fill_viridis_c(limits = c(70,220)) +
+      scale_fill_viridis_c(limits = c(70, 225)) +
       ggtitle("Modèle physique seul") +
       theme(aspect.ratio = 1)
 
@@ -223,7 +229,7 @@ plot_physique_predict + geom_point(data = as.data.frame(geodonnees_physique), ae
 ```
 
 Et maintenant comparons les deux cartes obtenues :
-```{r comparaison_deux_methodes, echo = TRUE}
+```{r comparaison_deux_methodes, echo = FALSE}
 plot_physique_predict + (plot_krigeage_predict)
 ```
 
@@ -232,10 +238,21 @@ il y en a à chaque point de la grille.
 
 
 ```{r mise_evidence_biais, echo = FALSE}
-tibble(erreur_modele_physique = donnees_stats_stations$z - donnees_stats_stations$mod)
+knitr::kable(tibble("Erreur modèle physique" = donnees_stats_stations$z - donnees_stats_stations$mod))
 ```
 
-## Le meilleur des deux mondes : Krigeage de l'erreur.
+Mais nous pouvons voir que le modèle physique présente des erreurs aux points 
+de mesures. C'est là que nous pouvons essayer de joindre les deux méthodes.
+
+## Le meilleur des deux mondes : Krigeage de l'erreur
+
+Voici la formule de l'erreur que nous allons chercher à kriger afin de corriger
+l'erreur commise par le modèle physique.
+
+\begin{align*}
+Z^{obs}_i - Z^{mod}_i &=  Err_i \\
+Z^{obs}_i &= Z^{mod}_i + Err_i
+\end{align*}
 
 ```{r erreur_station, echo = FALSE}
 donnees_stations_erreur <- donnees_stats_stations %>%
@@ -247,7 +264,7 @@ geodonnees_stations_erreur <- as.geodata(donnees_stations_erreur)
 Nous avons donc ici les erreurs commises par le modèle physique par rapport 
 aux vraies mesures.
 
-```{r variog_erreur, echo = TRUE}
+```{r variog_erreur, echo = FALSE}
 vario_err.c <- variog(geodonnees_stations_erreur, op = "cloud")
 plot(vario_err.c, main = "Nuée variographique", pch = "+")
 
@@ -257,11 +274,15 @@ plot(vario_err.b, main = "Variogramme empirique")
 # vario.b = variog(geodonnees_stations, max.dist = 100, breaks = seq(0, 90, l = 10)) # MODIF
 # plot(vario.b,main = "Variogramme empirique")
 ```
+
+Pour déterminer s'il y a une pépite, nous vérifions si l'erreur de mesure 
+est modifiée.
+
 On a :
 $$Z^{obs}_i = Z_i + \delta_i, \delta_i \sim \mathcal{N}(0, 100)$$
 
 \begin{align*}
-\underbrace{Z^{mod}_i - Z^{obs}_i}_{\tilde E_i} &= \underbrace{Z^{mod}_i - Z_i}_{E_i}  - \delta_i
+\underbrace{Z^{obs}_i - Z^{mod}_i}_{\hat Err_i} &= \underbrace{Z_i - Z^{mod}_i}_{Err_i}  + \delta_i
 \end{align*}
 
 Et on conserve donc la même pépite.
@@ -271,7 +292,7 @@ varioest_err <- variofit(vario_err.b,
       cov.model = "exponential", fix.nugget = TRUE,
       nugget = 100
 )
-summary(varioest_err)
+# summary(varioest_err)
 plot(vario_err.b, main = "modele exponential")
 lines(varioest_err)
 ```
@@ -286,43 +307,94 @@ Kcontrol_err = krige.control(type.krige = "ok", obj.model = varioest_err)
 K_err <- krige.conv(geodonnees_stations_erreur, loc = grille, krige = Kcontrol_err)
 ```
 
-```{r modele_phy_stats, echo = FALSE}
+```{r modele_phy_stats, echo = TRUE}
 donnees_stats_physique <- donnees_physique %>% mutate(
-      z_corr = z - K_err$predict,
+      z_corr = z + K_err$predict,
       krige.var = K_err$krige.var
 )
+```
 
+Et ci-dessus nous corrigeons donc les erreurs du modèles par les valeurs d'
+erreurs prédites.
+
+```{r plots_modele_phy_stats, echo = FALSE}
 plot_stats_physique <- ggplot(data = donnees_stats_physique) +
       aes(x = x, y = y) +
       geom_raster(aes(fill = z_corr)) +
-      scale_fill_viridis_c(limits = c(70, 220)) +
+      scale_fill_viridis_c(limits = c(70, 225)) +
       ggtitle("Modèle - Krigeage\nde l'erreur") +
       theme(aspect.ratio = 1)
 
 plot_erreur_variance <- ggplot(data = donnees_stats_physique) +
       aes(x = x, y = y) +
       geom_raster(aes(fill = krige.var)) +
-      scale_fill_viridis_c() +
+      scale_fill_gradient2("Variance\nde krigeage\nde l'erreur",
+      low = "lightblue", high = "darkorange") +
       ggtitle("Variance du Krigeage\nde l'erreur") +
       theme(aspect.ratio = 1)
 plot_stats_physique + plot_erreur_variance + plot_layout(
-      ncol = 2,
-      guides = "collect"
-)
+      ncol = 2)
 ```
 
 Comparons les 3 méthodes :
-```{r comparaison_3_methodes, echo = TRUE}
+```{r comparaison_3_methodes, echo = FALSE}
 plot_physique_predict + plot_krigeage_predict + plot_stats_physique + plot_layout(ncol = 2, nrow = 2, guides = "collect")
 ```
+
 On peut voir que le krigeage de l'erreur et sa prise en compte permettent de 
-diminiuer les valeurs du modèles physique.
+corriger les biais du modèle physique.
 
 On retrouve alors notamment des niveaux de 
 pollutions à l'ozone à Paris plus bas comme attendu aux vues des réactions qui 
 ont lieu avec les produits de pollution automobile.
 
-```{r plot_seuils, echo = TRUE}
+
+```{r comparaison_variance_plot, echo = FALSE }
+plot_krigeage_variance +
+      plot_erreur_variance +
+      geom_point(data = data_plot_stations, aes(x = x, y = y)) +
+      plot_layout(ncol = 2, guides = "collect")
+```
+```{r comparaison_variance_tibbe, echo=FALSE}
+knitr::kable(
+      as.data.frame(
+            rbind(
+                  cbind(
+                        t(
+                              round(
+                                    summary(data_plot_krige_stations$krige.var), 2
+                              )
+                        ),
+                        "Type Krigeage" = "Mesure"
+                  ),
+                  cbind(
+                        t(
+                              round(
+                                    summary(donnees_stats_physique$krige.var), 2
+                              )
+                        ),
+                        "Type Krigeage" = "Erreur"
+                  )
+            )
+      ),
+      caption = "Tableau comparatif des variances de krigeage"
+)
+```
+
+Et en regardant les variance de krigeage, nous pouvons voir que celles du 
+krigeage de l'erreur sont beaucoup plus petites que pour le krigeage des 
+données de concentration d'ozone.
+
+Nous en concluons donc que l'idée de kriger l'erreur permet ici de vraiment 
+gagner en précision et de profiter du modèle physique pour compléter les données
+non obtenues sur le reste de la région.
+
+# Utilisation du modèles physique corrigé par le krigeage pour la prise de mesures
+
+Et en utilisant les seuils définis au début du TP, nous obtenons la carte 
+suivante.
+
+```{r plot_seuils, echo = FALSE}
 # 130, 180, 360
 
 donnees_stats_physique$alerte_level <- cut(donnees_stats_physique$z_corr,
@@ -336,7 +408,7 @@ ggplot(data = donnees_stats_physique) +
       scale_fill_discrete() +
       ggtitle("Zone de dépassement des seuils") +
       theme(aspect.ratio = 1)
-
 ```
 
-Et voici donc les zones où les seuils précisés ont été dépassés.
+Et voici donc les zones où les seuils précisés ont été dépassés. Ce qui permet
+de prendre les mesures adéquates.
