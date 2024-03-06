@@ -55,7 +55,7 @@ météo, les émissions (inventaire, pas des mesures) et d'autres variables
 Ce modèle étant un modèle dynamique, il a besoin de conditions initiales dures à
 poser.
 
-En confrontant les prédictions du modèles physique et en le confrontant aux 
+En confrontant les prédictions du modèle physique et en le confrontant aux 
 données, il y a des **gros biais**.
 
 
@@ -111,10 +111,17 @@ On admet la présence d'un bruit de mesure de $10\mu g/m^3$ sur les observations
 
 ## Import des données
 ```{r charger les packages, echo=FALSE,message=FALSE,warning=FALSE}
-require(geoR)
-require(ggplot2)
-require(patchwork)
-require(dplyr)
+necessary_packages <- c("geoR", "ggplot2", "patchwork", "dplyr")
+
+if (any(!(necessary_packages %in% installed.packages()))){
+      install.packages(necessary_packages)
+}
+
+library(geoR)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+
 ```
 
 Ici on importe les données et on les converties en objet geodata
@@ -158,6 +165,10 @@ lines(varioest)
 
 Le variogramme ajusté est beaucoup moins joli que sur les données simulés mais
 cela est dû à l'utilisation de vraies données.
+
+*Remarque :* nous avons essayé plusieurs types de variogrammes sans en trouver
+un qui semble clairement meilleur. Nous avons donc choisi de rester sur un
+variogramme exponentiel.
 
 ```{r krigeage}
 # Pour générer la grille
@@ -316,7 +327,7 @@ donnees_stats_physique <- donnees_physique %>% mutate(
 )
 ```
 
-Et ci-dessus nous corrigeons donc les erreurs du modèles par les valeurs d'
+Et ci-dessus nous corrigeons donc les erreurs du modèle par les valeurs d'
 erreurs prédites.
 
 ```{r plots_modele_phy_stats, echo = FALSE}
@@ -387,7 +398,7 @@ Nous en concluons donc que l'idée de kriger l'erreur permet ici de vraiment
 gagner en précision et de profiter du modèle physique pour compléter les données
 non obtenues sur le reste de la région.
 
-# Utilisation du modèles physique corrigé par le krigeage pour la prise de mesures
+# Utilisation du modèle physique corrigé par le krigeage pour la prise de mesures
 
 Et en utilisant les seuils définis au début du TP, nous obtenons la carte 
 suivante.
@@ -397,13 +408,15 @@ suivante.
 
 donnees_stats_physique$alerte_level <- cut(donnees_stats_physique$z_corr,
       breaks = c(0, 130, 180, 360, Inf),
-      labels = c("normal", "alerte", "mesure", "mesure_forte")
+      labels = c("Niveau normal", "Niveau alertant", "Niveau prise de mesure", 
+      "Niveau prise de mesure forte")
 )
 
 ggplot(data = donnees_stats_physique) +
       aes(x = x, y = y) +
       geom_raster(aes(fill = alerte_level)) +
       scale_fill_discrete() +
+      labs(fill = "Concentration") +
       ggtitle("Zone de dépassement des seuils") +
       theme(aspect.ratio = 1)
 ```
