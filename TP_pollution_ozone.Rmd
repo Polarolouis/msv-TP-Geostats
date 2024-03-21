@@ -13,70 +13,75 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction et contexte
 
+## Prise de note pour le contexte du sujet 
+
 ### Les données géospatiales
 La région parisienne est assimilée à un carré qui comporte 21 stations mesurant
 plusieurs polluant dont l'ozone.
 
 Présent dans l'air à environ $60 \mu g/m^3$.
-Mais la circu automobile pollue et produit NO et NO2, qui s'associe à l'O2 de 
+Mais la circulation automobile pollue et produit NO et NO2, qui s'associe à l'O2 de 
 l'air et forme de l'O3 (+NO et NO2), si il y a du rayonnement élevé pour catalyser la 
 réaction. Pour mesurer le rayonnement, on utilise en proxy la température.
-Température élevée indique rayonnement élevé (forte corrélation). 
+Une température élevée indique rayonnement élevé (avec une forte corrélation). 
 Donc il n'y a de la pollution à l'ozone que en été.
-La réaction est réversible si il reste du NO et du NO2, donc en ville il y a peu
-d'ozone car il est reconsommé sur place.
+La réaction est réversible si il reste du NO et du NO2. Ainsi en ville où le NO 
+est produit, il y a peu d'ozone car il est re-consommé directement sur place.
 
 
-Mais avec du vent l'ozone se balade.
-En dépression le vent vient de l'Ouest et balaie tout.
-En situation anti-cyclonique, faible vent d'Est qui se fait piéger dans des 
-zones rurales.
-Donc l'endroit le plus pollué à l'ozone de la région Parisienne c'est 
+Mais avec du vent l'ozone est déplacé.
+Lors de dépressions, le vent vient de l'Ouest et balaie tout.
+En situation anti-cyclonique, il y a un faible vent d'Est et l'ozone se fait 
+piéger dans des zones rurales.
+Ainsi l'endroit le plus pollué à l'ozone de la région Parisienne est 
 Rambouillet.
 
-Les différents seuils :
+Il y a différents seuils de concentrations auxquels sont associés des actions :
 
 - $130\mu g/m^3$ alerte
 - $180\mu g/m^3$ prise de mesure
 - $360\mu g/m^3$ mesure plus forte
 
-Période temporelle : week-end d'août 1998 (avant le 15 août).
+La période temporelle des données : week-end d'août 1998 (avant le 15 août).
 
 Objectif : faire une carte
 On peut faire un krigeage avec les 21 mesures prises aux stations
-Mais risque d'être un peu léger !
+Mais cela risque d'être un peu léger comme nous allons le constater!
 
 ### Les physiciens à la rescousse
 
 Les physiciens du LMD ont mis au point un modèle physico-chimique basé sur la
 météo, les émissions (inventaire, pas des mesures) et d'autres variables 
-(topographie, ...). Ce modèle est valable sur toute la grille.
+(topographie, etc). Ce modèle est valable sur toute la grille.
 
 Ce modèle étant un modèle dynamique, il a besoin de conditions initiales dures à
 poser.
 
-En confrontant les prédictions du modèle physique et en le confrontant aux 
-données, il y a des **gros biais**.
+En confrontant les prédictions du modèle physique aux données, il y a 
+de **forts biais**.
 
 
 ### Comparaison et combinaison
-Le modèle stats aura un faible biais aux observations mais sera mauvais 
-ailleurs.
+Le modèle stats aura donc un faible biais aux observations (par définition du 
+modèle) mais sera mauvais ailleurs.
 Le modèle physique a un fort biais mais prend en compte la physique et sera 
-meilleur plus loin
+meilleur sur une plus large zone.
 
-On va donc combiner les deux :
+L'idée est alors de combiner les deux :
 $Z^{obs}_i - Z^{mod}_i = Err_i$
 
-Et faire un krigeage de l'erreur pour obtenir $\hat{Err_0}$ et donc reconstruire
-une valeur prédite intégrant la physique :
-$$ Z^{pred}_0 = Z^{mod}_0 + \hat{Err_0} $$
+Puis de faire un krigeage de l'erreur commise par le modèle pour obtenir 
+$\hat{Err_0}$ et donc reconstruire une valeur prédite intégrant le modèle 
+physique :
 
-## Objectif et questions du sujet
+$$ Z^{pred}_0 = Z^{mod}_0 + \hat{Err_0} $$.
 
-On souhaite réaliser une carte quotidienne de concentration d'ozone sur la région Parisienne. Pour cela on
-dispose chaque jour des sorties d'un modèle déterministe mis au point au Laboratoire de Météorologie
-Dynamique (Ecole Polytechnique) et des mesures de
+## Sujet : Objectif et questions du sujet
+
+On souhaite réaliser une carte quotidienne de concentration d'ozone sur la 
+région Parisienne. Pour cela on
+dispose chaque jour des sorties d'un modèle déterministe mis au point au 
+Laboratoire de Météorologie Dynamique (Ecole Polytechnique) et des mesures de
 concentration d'ozone effectuées par AirParif en 21 stations.
 Le fichier *stationsKm.txt*  contient un tableau formé des colonnes suivantes :
 - colonne 1 : abscisses (en km) des stations
@@ -124,7 +129,7 @@ library(dplyr)
 
 ```
 
-Ici on importe les données et on les converties en objet geodata
+Ici on importe les données et on les convertit en objet `geodata`
 
 ```{r import_donnees}
 donnees_stats_stations <- read.table("data/stationsKm.txt", header = TRUE)
@@ -146,28 +151,27 @@ plot(vario.c,main = "Nuée variographique",pch='+')
 # Variogramme empirique sans paramètre
 vario.b = variog(geodonnees_stations)
 plot(vario.b,main = "Variogramme empirique")
-# vario.b = variog(geodonnees_stations, max.dist = 100, breaks = seq(0, 90, l = 10)) # MODIF
-# plot(vario.b,main = "Variogramme empirique")
 ```
 
-L'erreur de mesure de $10 \mu g/m^3$ correspond à l'écart-type de l'erreur de 
-mesure. Donc on prend pour pépite la valeur de variance de l'erreur de mesure 
-soit 100.  
+*Remarque pour la pépite :* L'erreur de mesure de $10 \mu g/m^3$ correspond à 
+l'écart-type de l'erreur de mesure. Donc on prend pour pépite la valeur de 
+variance de l'erreur de mesure soit 100. 
+
 ```{r variogramme ajuste}
 varioest = variofit(vario.b,
     cov.model = "exponential", fix.nugget = TRUE,
     nugget = 100
 )
 summary(varioest)
-plot(vario.b, main="modele exponential")
+plot(vario.b, main="Modèle exponentiel")
 lines(varioest)
 ```
 
-Le variogramme ajusté est beaucoup moins joli que sur les données simulés mais
-cela est dû à l'utilisation de vraies données.
+Le variogramme ajusté est beaucoup moins joli que sur des données simulées mais
+nous nous y attendions car nous traitons des données réelles.
 
 *Remarque :* nous avons essayé plusieurs types de variogrammes sans en trouver
-un qui semble clairement meilleur. Nous avons donc choisi de rester sur un
+un qui semble clairement meilleur. Nous avons donc choisi de conserver un
 variogramme exponentiel.
 
 ```{r krigeage}
@@ -214,7 +218,8 @@ plot_krigeage_variance <- ggplot(data = data_plot_krige_stations) +
 ```
 
 On peut voir ici qu'avec le faible nombre de données (21 stations), le krigeage
-est grossier et la variance très grande. Donc la précision est très faible.
+est grossier et la variance très grande dès que l'on s'éloigne des points de 
+données. La précision de ce modèle est ainsi très faible en dehors des stations.
 
 ## Le modèle physique
 
@@ -236,23 +241,27 @@ plot_physique_predict <- ggplot(data = data_plot_physique) +
       ggtitle("Modèle physique seul") +
       theme(aspect.ratio = 1)
 
-plot_physique_predict + geom_point(data = as.data.frame(geodonnees_physique), aes(x = x, y = y))
+plot_physique_predict #+ geom_point(data = as.data.frame(geodonnees_physique), aes(x = x, y = y))
 ```
+
+
 
 Et maintenant comparons les deux cartes obtenues :
 ```{r comparaison_deux_methodes, echo = FALSE}
 plot_physique_predict + (plot_krigeage_predict)
 ```
 
-Pour le modèle physique nous n'avons pas représenté les points de données car 
+*Remarque :* Pour le modèle physique nous n'avons pas représenté les points de données car 
 il y en a à chaque point de la grille.
 
+Nous obtenons un résultat qui semble être plus précis sur l'ensemble de la 
+carte. Mais regardons les erreurs commises par le modèle aux points de mesure.
 
-```{r mise_evidence_biais, echo = FALSE}
-knitr::kable(tibble("Erreur modèle physique" = donnees_stats_stations$z - donnees_stats_stations$mod))
+```{r mise_evidence_biais, echo = FALSE, fig.align="center"}
+knitr::kable(tibble("Numéro de station" = seq(1,21), "Erreurs du modèle physique" = donnees_stats_stations$z - donnees_stats_stations$mod), align = "c")
 ```
 
-Mais nous pouvons voir que le modèle physique présente des erreurs aux points 
+Nous pouvons voir que le modèle physique commet des erreurs aux points 
 de mesures et, majoritairement, sous-estime les valeurs réelles. 
 
 C'est là que nous pouvons essayer de joindre les deux méthodes.
@@ -274,8 +283,9 @@ donnees_stations_erreur <- donnees_stats_stations %>%
 geodonnees_stations_erreur <- as.geodata(donnees_stations_erreur)
 ```
 
-Nous avons donc ici les erreurs commises par le modèle physique par rapport 
-aux vraies mesures.
+Nous avons donc ici comme données de type `geodata` sur lesquelles réaliser le 
+krigeage les erreurs commises par le modèle physique par rapport aux vraies
+mesures.
 
 ```{r variog_erreur, echo = FALSE}
 vario_err.c <- variog(geodonnees_stations_erreur, op = "cloud")
@@ -284,8 +294,6 @@ plot(vario_err.c, main = "Nuée variographique", pch = "+")
 # Variogramme empirique sans paramètre
 vario_err.b <- variog(geodonnees_stations_erreur)
 plot(vario_err.b, main = "Variogramme empirique")
-# vario.b = variog(geodonnees_stations, max.dist = 100, breaks = seq(0, 90, l = 10)) # MODIF
-# plot(vario.b,main = "Variogramme empirique")
 ```
 
 Pour déterminer s'il y a une pépite, nous vérifions si l'erreur de mesure 
@@ -298,7 +306,8 @@ $$Z^{obs}_i = Z_i + \delta_i, \delta_i \sim \mathcal{N}(0, 100)$$
 \underbrace{Z^{obs}_i - Z^{mod}_i}_{\hat Err_i} &= \underbrace{Z_i - Z^{mod}_i}_{Err_i}  + \delta_i
 \end{align*}
 
-Et on conserve donc la même pépite.
+Et on conserve donc la même pépite. Aux vues du variogramme empirique nous
+choisissons d'ajuster un variogramme exponentiel ici aussi.
 
 ```{r variofit_erreur, echo = TRUE}
 varioest_err <- variofit(vario_err.b,
@@ -306,7 +315,7 @@ varioest_err <- variofit(vario_err.b,
       nugget = 100
 )
 # summary(varioest_err)
-plot(vario_err.b, main = "modele exponential")
+plot(vario_err.b, main = "Modèle exponentiel")
 lines(varioest_err)
 ```
 
@@ -355,7 +364,7 @@ plot_physique_predict + plot_krigeage_predict + plot_stats_physique + plot_layou
 ```
 
 On peut voir que le krigeage de l'erreur et sa prise en compte permettent de 
-corriger les biais du modèle physique.
+corriger les biais du modèle physique aux stations.
 
 
 ```{r comparaison_variance_plot, echo = FALSE }
@@ -394,9 +403,9 @@ Et en regardant les variance de krigeage, nous pouvons voir que celles du
 krigeage de l'erreur sont beaucoup plus petites que pour le krigeage des 
 données de concentration d'ozone.
 
-Nous en concluons donc que l'idée de kriger l'erreur permet ici de vraiment 
+Nous en concluons donc que l'idée de *kriger* l'erreur permet ici de vraiment 
 gagner en précision et de profiter du modèle physique pour compléter les données
-non obtenues sur le reste de la région.
+non mesurées sur le reste de la région.
 
 # Utilisation du modèle physique corrigé par le krigeage pour la prise de mesures
 
